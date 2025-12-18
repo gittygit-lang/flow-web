@@ -17,6 +17,7 @@ A simple web browser built with Python and PyQt6, featuring basic Chrome-like fu
 - Downloads management (placeholder)
 - New tab creation
 - Mouse pointer lock support for immersive web experiences
+- Sick SICK UI
 
 ## Requirements
 

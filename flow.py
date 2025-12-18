@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QListWidget, QSplitter, QDialog, QLabel, QFormLayout, QComboBox, QCheckBox, QToolBar, QMenuBar
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QListWidget, QSplitter, QDialog, QLabel, QFormLayout, QComboBox, QCheckBox, QToolBar, QMenu
 from PyQt6.QtGui import QAction, QPalette, QColor
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
@@ -17,41 +17,58 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Flow Browser")
         self.setGeometry(100, 100, 1200, 800)
         
-        # Menu bar
-        file_menu = self.menuBar().addMenu("File")
-        file_menu.addAction("New Tab", self.add_new_tab)
-        file_menu.addAction("Close Tab", self.close_current_tab)
-        
-        view_menu = self.menuBar().addMenu("View")
-        view_menu.addAction("Bookmarks", self.show_bookmarks)
-        view_menu.addAction("History", self.show_history)
-        view_menu.addAction("Downloads", self.show_downloads)
-        view_menu.addAction("Settings", self.show_settings)
-        
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         
         # Top row: buttons and URL bar
         top_layout = QHBoxLayout()
+        top_layout.setContentsMargins(8, 6, 8, 6)
+        top_layout.setSpacing(6)
         
         # Buttons container
         button_widget = QWidget()
         button_layout = QHBoxLayout(button_widget)
         button_layout.setContentsMargins(0, 0, 0, 0)
+
+        # App menu (shown from the "..." button on the right)
+        self.app_menu = QMenu(self)
+
+        # Former "File" actions
+        self.app_menu.addAction("New Tab", self.add_new_tab)
+        self.app_menu.addAction("Close Tab", self.close_current_tab)
+        self.app_menu.addSeparator()
+
+        # Former "View" actions
+        self.app_menu.addAction("Bookmarks", self.show_bookmarks)
+        self.app_menu.addAction("History", self.show_history)
+        self.app_menu.addAction("Downloads", self.show_downloads)
+        self.app_menu.addAction("Settings", self.show_settings)
+
         self.back_btn = QPushButton("←")
+        self.back_btn.setProperty("chromeNav", True)
+        self.back_btn.setFixedSize(34, 34)
         self.back_btn.clicked.connect(self.go_back)
         button_layout.addWidget(self.back_btn)
         
         self.forward_btn = QPushButton("→")
+        self.forward_btn.setProperty("chromeNav", True)
+        self.forward_btn.setFixedSize(34, 34)
         self.forward_btn.clicked.connect(self.go_forward)
         button_layout.addWidget(self.forward_btn)
         
         self.refresh_btn = QPushButton("↻")
+        self.refresh_btn.setProperty("chromeNav", True)
+        self.refresh_btn.setFixedSize(34, 34)
         self.refresh_btn.clicked.connect(self.refresh_page)
         button_layout.addWidget(self.refresh_btn)
         
+        # Home button: keep text, but make it wider so it doesn't clip
         self.home_btn = QPushButton("Home")
+        self.home_btn.setToolTip("Home")
+        self.home_btn.setProperty("chromeNav", True)
+        self.home_btn.setFixedHeight(34)
+        self.home_btn.setMinimumWidth(64)
         self.home_btn.clicked.connect(self.go_home)
         button_layout.addWidget(self.home_btn)
 
@@ -59,21 +76,35 @@ class MainWindow(QMainWindow):
         
         # URL bar
         self.url_bar = QLineEdit()
+        self.url_bar.setProperty("chromeOmnibox", True)
         self.url_bar.returnPressed.connect(self.load_url)
         top_layout.addWidget(self.url_bar, 3)  # URL bar takes 75%
+
+        # Menu button on the right
+        self.menu_btn = QPushButton("...")
+        self.menu_btn.setProperty("chromeNav", True)
+        self.menu_btn.setMenu(self.app_menu)
+        self.menu_btn.setFixedSize(34, 34)
+        top_layout.addWidget(self.menu_btn, 0)
         
         layout.addLayout(top_layout)
         
         # Tab widget
         self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.tabs.setMovable(True)
+        self.tabs.setUsesScrollButtons(True)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.currentChanged.connect(self.update_nav_buttons)
+        self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
         
         # Add initial tab
         self.add_new_tab()
         self.apply_theme()
+        self.apply_chrome_style()
+
+        
 
         
     
@@ -94,39 +125,181 @@ class MainWindow(QMainWindow):
     
     def apply_theme(self):
         if self.current_theme == "dark":
+            # Darker than the previous "Chrome dark" approximation
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.black)
+            palette.setColor(QPalette.ColorRole.Window, QColor("#0f0f10"))
             palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.black)
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(30, 30, 30))
-            palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.black)
+            palette.setColor(QPalette.ColorRole.Base, QColor("#0f0f10"))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#1a1b1e"))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#1a1b1e"))
             palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.Button, QColor(30, 30, 30))
+            palette.setColor(QPalette.ColorRole.Button, QColor("#1a1b1e"))
             palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-            palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.Link, QColor("#8ab4f8"))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor("#8ab4f8"))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
             self.setPalette(palette)
         else:
-            # Light theme with white background
+            # Light theme (Chrome-like grays)
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.white)
+            palette.setColor(QPalette.ColorRole.Window, QColor("#f1f3f4"))
             palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.black)
             palette.setColor(QPalette.ColorRole.Base, Qt.GlobalColor.white)
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(240, 240, 240))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f1f3f4"))
             palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
             palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.black)
             palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.black)
-            palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
+            palette.setColor(QPalette.ColorRole.Button, QColor("#f1f3f4"))
             palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.black)
             palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-            palette.setColor(QPalette.ColorRole.Link, QColor(0, 0, 255))
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
+            palette.setColor(QPalette.ColorRole.Link, QColor("#1a73e8"))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor("#1a73e8"))
             palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
             self.setPalette(palette)
-    
+
+        # Apply theme application-wide so dialogs/menus follow it too
+        app = QApplication.instance()
+        if app:
+            app.setPalette(palette)
+
+        # Keep the "Chrome" styling in sync with the theme
+        self.apply_chrome_style()
+
+    def apply_chrome_style(self):
+        if self.current_theme == "dark":
+            # Darker theme values (deeper blacks)
+            top_bg = "#0f0f10"
+            tab_bg = "#1a1b1e"
+            tab_active_bg = "#0f0f10"
+            border = "#2a2b2f"
+            text = "#e8eaed"
+            hover = "rgba(232,234,237,0.10)"
+            press = "rgba(232,234,237,0.16)"
+            omnibox_bg = "#1a1b1e"
+        else:
+            top_bg = "#f1f3f4"
+            tab_bg = "#e8eaed"
+            tab_active_bg = "#ffffff"
+            border = "#dadce0"
+            text = "#202124"
+            hover = "rgba(60,64,67,0.08)"
+            press = "rgba(60,64,67,0.12)"
+            omnibox_bg = "#ffffff"
+
+        # Apply stylesheet application-wide so dialogs/menus follow it too
+        app = QApplication.instance()
+        target = app if app else self
+
+        target.setStyleSheet(f"""
+            QWidget {{
+                color: {text};
+            }}
+
+            /* Window background */
+            QMainWindow, QDialog {{
+                background: {top_bg};
+            }}
+
+            /* Chrome-like icon buttons */
+            QPushButton[chromeNav=\"true\"] {{
+                border: none;
+                background: transparent;
+                border-radius: 10px;
+                padding: 6px;
+            }}
+            QPushButton[chromeNav=\"true\"]:hover {{
+                background: {hover};
+            }}
+            QPushButton[chromeNav=\"true\"]:pressed {{
+                background: {press};
+            }}
+
+            /* Hide the small dropdown arrow that Qt adds to menu buttons */
+            QPushButton[chromeNav=\"true\"]::menu-indicator {{
+                image: none;
+                width: 0px;
+            }}
+
+            /* Omnibox */
+            QLineEdit[chromeOmnibox=\"true\"] {{
+                background: {omnibox_bg};
+                border: 1px solid {border};
+                border-radius: 17px;
+                padding: 7px 12px;
+                selection-background-color: #1a73e8;
+                selection-color: white;
+            }}
+            QLineEdit[chromeOmnibox=\"true\"]:focus {{
+                border: 1px solid #1a73e8;
+            }}
+
+            /* Menus (e.g. the "..." button) */
+            QMenu {{
+                background-color: {omnibox_bg};
+                color: {text};
+                border: 1px solid {border};
+                border-radius: 10px;
+                padding: 8px;
+            }}
+            QMenu::item {{
+                padding: 8px 24px;
+                border-radius: 6px;
+            }}
+            QMenu::item:selected {{
+                background-color: {hover};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background-color: {border};
+                margin: 6px 4px;
+            }}
+
+            /* ComboBox dropdowns (e.g. Settings -> Theme) */
+            QComboBox {{
+                background-color: {omnibox_bg};
+                color: {text};
+                border: 1px solid {border};
+                border-radius: 8px;
+                padding: 4px 10px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 24px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {omnibox_bg};
+                color: {text};
+                border: 1px solid {border};
+                border-radius: 10px;
+                selection-background-color: {hover};
+                selection-color: {text};
+                outline: 0;
+            }}
+
+            /* Tabs */
+            QTabWidget::pane {{
+                border: 0;
+            }}
+            QTabBar::tab {{
+                background: {tab_bg};
+                border: 1px solid {border};
+                border-bottom: 0;
+                border-top-left-radius: 10px;
+                border-top-right-radius: 10px;
+                padding: 6px 12px;
+                margin-right: 3px;
+                min-width: 120px;
+            }}
+            QTabBar::tab:selected {{
+                background: {tab_active_bg};
+            }}
+            QTabBar::tab:hover {{
+                background: {hover};
+            }}
+        """)
+  
     def add_new_tab(self, url="https://www.startpage.com"):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -148,9 +321,9 @@ class MainWindow(QMainWindow):
         web_view.page().featurePermissionRequested.connect(self.handle_feature_permission)
         
         # Connect signals
-        web_view.titleChanged.connect(lambda title: self.update_tab_title(title))
-        web_view.urlChanged.connect(lambda url: self.update_url_bar(url))
-        web_view.urlChanged.connect(self.update_nav_buttons)
+        web_view.titleChanged.connect(lambda title, view=web_view: self.update_tab_title(title, view))
+        web_view.urlChanged.connect(lambda url, view=web_view: self.update_url_bar(url, view))
+        web_view.urlChanged.connect(lambda _url, view=web_view: self.update_nav_buttons(view=view))
         web_view.loadFinished.connect(self.add_to_history)
         
         return web_view
@@ -178,16 +351,40 @@ class MainWindow(QMainWindow):
         self.url_bar.setText("https://www.startpage.com")
         self.load_url()
     
-    def update_tab_title(self, title):
-        index = self.tabs.currentIndex()
-        self.tabs.setTabText(index, title)
-    
-    def update_url_bar(self, url):
-        self.url_bar.setText(url.toString())
-    
-    def update_nav_buttons(self):
+    def _tab_index_for_view(self, view):
+        for i in range(self.tabs.count()):
+            w = self.tabs.widget(i)
+            if hasattr(w, "web_view") and w.web_view is view:
+                return i
+        return -1
+
+    def on_tab_changed(self, index):
+        current_tab = self.tabs.widget(index)
+        if not current_tab or not hasattr(current_tab, "web_view"):
+            return
+
+        # Sync omnibox + nav buttons to the newly selected tab
+        self.url_bar.setText(current_tab.web_view.url().toString())
+        self.update_nav_buttons(view=current_tab.web_view)
+
+    def update_tab_title(self, title, view=None):
+        index = self.tabs.currentIndex() if view is None else self._tab_index_for_view(view)
+        if index >= 0:
+            self.tabs.setTabText(index, title)
+
+    def update_url_bar(self, url, view=None):
+        # Only update the URL bar if the signal is from the active tab
         current_tab = self.tabs.currentWidget()
-        if current_tab:
+        if current_tab and hasattr(current_tab, "web_view"):
+            if view is not None and view is not current_tab.web_view:
+                return
+        self.url_bar.setText(url.toString())
+
+    def update_nav_buttons(self, *args, view=None):
+        current_tab = self.tabs.currentWidget()
+        if current_tab and hasattr(current_tab, "web_view"):
+            if view is not None and view is not current_tab.web_view:
+                return
             self.back_btn.setEnabled(current_tab.web_view.history().canGoBack())
             self.forward_btn.setEnabled(current_tab.web_view.history().canGoForward())
     
