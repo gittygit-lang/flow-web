@@ -1,6 +1,6 @@
 # Flow Browser
 
-A simple web browser built with Python and PyQt6, featuring basic Chrome-like functionality.
+A minimal open source web browser made with Python.
 
 ## Features
 
