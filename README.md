@@ -1,6 +1,6 @@
 # Flow Browser
 
-[flow browser screenshot](https://pasteboard.co/CG4GOGlNUAZ9.png)
+[flow browser screenshot](https://gcdnb.pbrd.co/images/CG4GOGlNUAZ9.png?o=1)
 
 A minimal open source web browser made with Python.
 
