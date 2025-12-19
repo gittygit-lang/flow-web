@@ -16,7 +16,7 @@ A minimal open source web browser made with Python.
 - Browsing history tracking and viewing
 - Downloads management (placeholder)
 - New tab creation
-- Mouse pointer lock support for immersive web experiences
+- Mouse pointer lock support for gaming >:)
 - Sick SICK UI
 
 ## Requirements
