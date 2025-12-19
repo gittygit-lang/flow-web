@@ -1,5 +1,7 @@
 # Flow Browser
 
+[flow browser screenshot](https://pasteboard.co/CG4GOGlNUAZ9.png)
+
 A minimal open source web browser made with Python.
 
 ## Features
