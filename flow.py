@@ -30,6 +30,7 @@ class MainWindow(QMainWindow):
         button_widget = QWidget()
         button_layout = QHBoxLayout(button_widget)
         button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(2)  # Reduced spacing between buttons
 
         # App menu (shown from the "..." button on the right)
         self.app_menu = QMenu(self)
@@ -67,8 +68,8 @@ class MainWindow(QMainWindow):
         self.home_btn = QPushButton("Home")
         self.home_btn.setToolTip("Home")
         self.home_btn.setProperty("chromeNav", True)
+        self.home_btn.setProperty("homeButton", True)  # Specific property for home button styling
         self.home_btn.setFixedHeight(34)
-        self.home_btn.setMinimumWidth(64)
         self.home_btn.clicked.connect(self.go_home)
         button_layout.addWidget(self.home_btn)
 
@@ -207,7 +208,7 @@ class MainWindow(QMainWindow):
                 border: none;
                 background: transparent;
                 border-radius: 10px;
-                padding: 6px;
+                padding: 3px;
             }}
             QPushButton[chromeNav=\"true\"]:hover {{
                 background: {hover};
@@ -220,6 +221,11 @@ class MainWindow(QMainWindow):
             QPushButton[chromeNav=\"true\"]::menu-indicator {{
                 image: none;
                 width: 0px;
+            }}
+
+            /* Home button with reduced padding */
+            QPushButton[homeButton=\"true\"] {{
+                padding: 1px 2px;
             }}
 
             /* Omnibox */
@@ -576,8 +582,31 @@ class MainWindow(QMainWindow):
         dialog.exec()  # Updated from exec_() to exec()
 
     def open_download_location(self):
-        # Implement opening file location
-        pass
+        """Open the Downloads folder in the system file manager."""
+        import subprocess
+        import platform
+        import os
+        from pathlib import Path
+        
+        # Get Downloads folder path
+        if sys.platform == "win32":
+            downloads_path = Path.home() / "Downloads"
+        elif sys.platform == "darwin":
+            downloads_path = Path.home() / "Downloads"
+        else:
+            downloads_path = Path.home() / "Downloads"
+        
+        downloads_path = str(downloads_path)
+        
+        try:
+            if platform.system() == "Windows":
+                subprocess.Popen(f'explorer "{downloads_path}"')
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", downloads_path])
+            else:
+                subprocess.Popen(["xdg-open", downloads_path])
+        except Exception as e:
+            print(f"Error opening Downloads folder: {e}")
 
     def remove_download(self):
         selected = self.downloads_list.currentRow()
