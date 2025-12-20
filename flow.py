@@ -7,6 +7,17 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# Enable experimental WebAssembly features (JSPI) in the embedded Chromium via Qt WebEngine flags.
+# Must be set before importing any Qt WebEngine modules or creating QApplication.
+try:
+    existing_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    extra_flags = "--enable-experimental-webassembly-features --js-flags=--experimental-wasm-jspi --enable-features=WebAssemblyJSPI"
+    if extra_flags not in existing_flags:
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (existing_flags + " " + extra_flags).strip()
+except Exception:
+    # Non-fatal: proceed if environment cannot be modified
+    pass
+
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QListWidget, QSplitter, QDialog, QLabel, QFormLayout, QComboBox, QCheckBox, QToolBar, QMenu, QFileDialog, QMessageBox
 from PyQt6.QtGui import QAction, QPalette, QColor, QShortcut, QKeySequence
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -129,6 +140,7 @@ class MainWindow(QMainWindow):
         self.app_menu.addAction("Cookies", self.show_cookies)
         self.app_menu.addAction("Inspect", self.open_devtools)
         self.app_menu.addAction("Settings", self.show_settings)
+        self.app_menu.addAction("Offline Games", self.open_offline_games)
 
         self.back_btn = QPushButton("←")
         self.back_btn.setProperty("chromeNav", True)
@@ -462,6 +474,78 @@ class MainWindow(QMainWindow):
     def go_home(self):
         self.url_bar.setText("https://www.startpage.com")
         self.load_url()
+
+    def open_offline_games(self):
+        """Show a dialog of available offline games (folders in flow-offlinegames) and open selection."""
+        try:
+            base_dir = Path(__file__).resolve().parent
+            games_root = base_dir / "flow-offlinegames"
+            if not games_root.exists():
+                QMessageBox.information(self, "Offline Games", f"No offline games folder found at:\n{games_root}")
+                return
+
+            # List immediate subfolders as games
+            game_dirs = [p for p in games_root.iterdir() if p.is_dir()]
+            if not game_dirs:
+                QMessageBox.information(self, "Offline Games", "No games found in flow-offlinegames.")
+                return
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Offline Games")
+            dialog.setGeometry(300, 300, 500, 400)
+
+            vbox = QVBoxLayout(dialog)
+            info = QLabel("Choose a game to launch")
+            vbox.addWidget(info)
+
+            list_widget = QListWidget()
+            sorted_dirs = sorted(game_dirs, key=lambda p: p.name.lower())
+            for d in sorted_dirs:
+                list_widget.addItem(d.name)
+            if list_widget.count() > 0:
+                list_widget.setCurrentRow(0)
+            vbox.addWidget(list_widget)
+
+            btn_row = QHBoxLayout()
+            open_btn = QPushButton("Open")
+            cancel_btn = QPushButton("Cancel")
+            btn_row.addWidget(open_btn)
+            btn_row.addWidget(cancel_btn)
+            vbox.addLayout(btn_row)
+
+            def pick_entry_html(game_path: Path) -> Path | None:
+                index_root = game_path / "index.html"
+                if index_root.exists():
+                    return index_root
+                # Look for index.html anywhere under the game directory
+                for p in game_path.rglob("index.html"):
+                    return p
+                # Fallback: any html under the game directory
+                for p in game_path.rglob("*.html"):
+                    return p
+                return None
+
+            def launch_selected():
+                row = list_widget.currentRow()
+                if row < 0:
+                    return
+                game_path = sorted_dirs[row]
+                html = pick_entry_html(game_path)
+                if html is None:
+                    QMessageBox.warning(self, "Offline Games", f"No HTML entry file (e.g., index.html) found in:\n{game_path}")
+                    return
+                url = QUrl.fromLocalFile(str(html))
+                self.add_new_tab(url.toString())
+                self.tabs.setTabText(self.tabs.currentIndex(), game_path.name)
+                dialog.accept()
+
+            open_btn.clicked.connect(launch_selected)
+            cancel_btn.clicked.connect(dialog.reject)
+            list_widget.itemDoubleClicked.connect(lambda _item: launch_selected())
+
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "Offline Games", f"Failed to list/open offline games:\n{e}")
 
     def save_page_as_html(self):
         """Save the currently displayed page to a .html file (DOM only).
