@@ -29,7 +29,7 @@ A minimal open source web browser made with Python.
 
 ## Installation
 
-- imao there is a reason why it is on Github
+- go to the **"Releases"** section
 
 ## Requirements
 
