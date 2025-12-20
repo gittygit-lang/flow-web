@@ -885,9 +885,24 @@ class MainWindow(QMainWindow):
         self.tabs.removeTab(index)
     
     def load_url(self):
-        url = self.url_bar.text()
+        url = self.url_bar.text().strip()
+        
+        # Detect if input is a search query or a URL
         if not url.startswith("http"):
-            url = "https://" + url
+            # Has URL-like characters (scheme, path, or @) -> treat as URL
+            if "://" in url or "/" in url or "@" in url:
+                url = url if url.startswith("http") else "https://" + url
+            # Has spaces -> likely a search query
+            elif " " in url:
+                search_query = url.replace(" ", "+")
+                url = f"https://www.startpage.com/sp/search?q={search_query}"
+            # Has a dot and no spaces -> likely a domain
+            elif "." in url:
+                url = "https://" + url
+            # No spaces, no dots -> search query
+            else:
+                url = f"https://www.startpage.com/sp/search?q={url}"
+        
         current_tab = self.tabs.currentWidget()
         if current_tab:
             current_tab.web_view.load(QUrl(url))
