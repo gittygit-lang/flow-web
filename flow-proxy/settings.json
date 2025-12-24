@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "type": "http",
+  "hostname": "",
+  "port": 0,
+  "username": "",
+  "password": ""
+}

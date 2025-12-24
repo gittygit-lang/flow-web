@@ -24,7 +24,8 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile, QWebEngineDownloadRequest
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtCore import QUrl, Qt, QObject, pyqtSlot
-from PyQt6.QtWidgets import QStatusBar, QStyle
+from PyQt6.QtWidgets import QStatusBar, QStyle, QDialogButtonBox
+from PyQt6.QtNetwork import QNetworkProxy
 
 
 # Global persistent profile
@@ -143,6 +144,13 @@ class MainWindow(QMainWindow):
         self.app_menu.addAction("Inspect", self.open_devtools)
         self.app_menu.addAction("Settings", self.show_settings)
         self.app_menu.addAction("Offline Games", self.open_offline_games)
+        self.app_menu.addSeparator()
+
+        # Proxy Menu
+        self.proxy_menu = self.app_menu.addMenu("Proxy")
+        self.enable_proxy_action = QAction("Enable Proxy", self, checkable=True)
+        self.proxy_menu.addAction(self.enable_proxy_action)
+        self.proxy_menu.addAction("Proxy Settings...", self.show_proxy_settings_dialog)
 
         self.new_tab_btn = QPushButton("+")
         self.new_tab_btn.setToolTip("New Tab (Ctrl+T)")
@@ -230,6 +238,13 @@ class MainWindow(QMainWindow):
         self._new_tab_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
         self._new_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self._new_tab_shortcut.activated.connect(self.add_new_tab)
+
+        # Proxy setup
+        self.proxy_settings = self._load_proxy_settings()
+        self.enable_proxy_action.setChecked(self.proxy_settings.get("enabled", False))
+        self.enable_proxy_action.triggered.connect(self.toggle_proxy)
+        if self.proxy_settings.get("enabled", False):
+            self.apply_proxy()
 
         
 
@@ -1581,6 +1596,111 @@ class MainWindow(QMainWindow):
             cookies_list.addItem("No cookies stored")
 
     # ...existing code...
+
+    def _proxy_settings_path(self) -> Path:
+        return Path(__file__).resolve().parent / "flow-proxy" / "settings.json"
+
+    def _load_proxy_settings(self) -> dict:
+        path = self._proxy_settings_path()
+        if not path.exists():
+            return {"enabled": False, "type": "http", "hostname": "", "port": 0, "username": "", "password": ""}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def _save_proxy_settings(self):
+        path = self._proxy_settings_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.proxy_settings, f, indent=2)
+        except IOError as e:
+            print(f"Error saving proxy settings: {e}")
+
+    def toggle_proxy(self, checked):
+        self.proxy_settings["enabled"] = checked
+        self._save_proxy_settings()
+
+        if checked:
+            host = self.proxy_settings.get("hostname")
+            port = self.proxy_settings.get("port")
+            if not host or not port:
+                QMessageBox.warning(self, "Proxy Not Configured", "Proxy is enabled but not configured. Please enter your proxy details in the settings.")
+                self.show_proxy_settings_dialog()
+                # Re-check if settings were added
+                if not self.proxy_settings.get("hostname") or not self.proxy_settings.get("port"):
+                    self.enable_proxy_action.setChecked(False)
+                    self.proxy_settings["enabled"] = False
+                    self._save_proxy_settings()
+                    return
+            self.apply_proxy()
+        else:
+            self.disable_proxy()
+
+    def apply_proxy(self):
+        proxy_type_str = self.proxy_settings.get("type", "http").lower()
+        proxy_type = QNetworkProxy.ProxyType.HttpProxy
+        if proxy_type_str == "socks5":
+            proxy_type = QNetworkProxy.ProxyType.Socks5Proxy
+
+        proxy = QNetworkProxy(
+            proxy_type,
+            self.proxy_settings.get("hostname"),
+            int(self.proxy_settings.get("port", 0)),
+            self.proxy_settings.get("username", ""),
+            self.proxy_settings.get("password", ""),
+        )
+        QNetworkProxy.setApplicationProxy(proxy)
+        self.status_bar.showMessage(f"Proxy Enabled: {self.proxy_settings.get('hostname')}", 5000)
+
+    def disable_proxy(self):
+        QNetworkProxy.setApplicationProxy(QNetworkProxy())
+        self.status_bar.showMessage("Proxy Disabled", 3000)
+
+    def show_proxy_settings_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Proxy Settings")
+        layout = QFormLayout(dialog)
+
+        proxy_type_combo = QComboBox()
+        proxy_type_combo.addItems(["HTTP", "SOCKS5"])
+        proxy_type_combo.setCurrentText(self.proxy_settings.get("type", "http").upper())
+
+        host_edit = QLineEdit(self.proxy_settings.get("hostname", ""))
+        port_edit = QLineEdit(str(self.proxy_settings.get("port", "")))
+        user_edit = QLineEdit(self.proxy_settings.get("username", ""))
+        pass_edit = QLineEdit(self.proxy_settings.get("password", ""))
+        pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        layout.addRow("Proxy Type:", proxy_type_combo)
+        layout.addRow("Hostname:", host_edit)
+        layout.addRow("Port:", port_edit)
+        layout.addRow("Username:", user_edit)
+        layout.addRow("Password:", pass_edit)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addRow(button_box)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                port = int(port_edit.text()) if port_edit.text() else 0
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Port", "Port must be a number.")
+                return
+
+            self.proxy_settings["type"] = proxy_type_combo.currentText().lower()
+            self.proxy_settings["hostname"] = host_edit.text()
+            self.proxy_settings["port"] = port
+            self.proxy_settings["username"] = user_edit.text()
+            self.proxy_settings["password"] = pass_edit.text()
+            self._save_proxy_settings()
+
+            if self.enable_proxy_action.isChecked():
+                self.apply_proxy()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
