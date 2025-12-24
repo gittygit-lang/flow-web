@@ -12,8 +12,11 @@ A minimal open source web browser made with Python.
 
 ## Installation
 
-- pip install pyqt6
-- git clone https://www.github.com/gittygit-lang/flow-web.git
+Copy this code:
+```bash
+pip install pyqt6
+git clone https://www.github.com/gittygit-lang/flow-web.git
+```
 
 ## Requirements
 
