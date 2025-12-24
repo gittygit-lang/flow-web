@@ -18,12 +18,14 @@ except Exception:
     # Non-fatal: proceed if environment cannot be modified
     pass
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QListWidget, QSplitter, QDialog, QLabel, QFormLayout, QComboBox, QCheckBox, QToolBar, QMenu, QFileDialog, QMessageBox
-from PyQt6.QtGui import QAction, QPalette, QColor, QShortcut, QKeySequence
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QTabWidget, QListWidget, QSplitter, QDialog, QLabel, QFormLayout, QComboBox, QCheckBox, QToolBar, QMenu, QFileDialog, QMessageBox, QProgressBar
+from PyQt6.QtGui import QAction, QPalette, QColor, QShortcut, QKeySequence, QIcon
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile, QWebEngineDownloadRequest
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtCore import QUrl, Qt, QObject, pyqtSlot
+from PyQt6.QtWidgets import QStatusBar, QStyle
+
 
 # Global persistent profile
 _PERSISTENT_PROFILE = None
@@ -142,24 +144,31 @@ class MainWindow(QMainWindow):
         self.app_menu.addAction("Settings", self.show_settings)
         self.app_menu.addAction("Offline Games", self.open_offline_games)
 
-        self.back_btn = QPushButton("←")
+        self.new_tab_btn = QPushButton("+")
+        self.new_tab_btn.setToolTip("New Tab (Ctrl+T)")
+        self.new_tab_btn.setProperty("chromeNav", True)
+        self.new_tab_btn.setFixedSize(34, 34)
+        self.new_tab_btn.clicked.connect(lambda: self.add_new_tab())
+        button_layout.addWidget(self.new_tab_btn)
+
+        self.back_btn = QPushButton("<-")
         self.back_btn.setProperty("chromeNav", True)
         self.back_btn.setFixedSize(34, 34)
         self.back_btn.clicked.connect(self.go_back)
         button_layout.addWidget(self.back_btn)
-        
-        self.forward_btn = QPushButton("→")
+
+        self.forward_btn = QPushButton("->")
         self.forward_btn.setProperty("chromeNav", True)
         self.forward_btn.setFixedSize(34, 34)
         self.forward_btn.clicked.connect(self.go_forward)
         button_layout.addWidget(self.forward_btn)
-        
+
         self.refresh_btn = QPushButton("↻")
         self.refresh_btn.setProperty("chromeNav", True)
         self.refresh_btn.setFixedSize(34, 34)
         self.refresh_btn.clicked.connect(self.refresh_page)
         button_layout.addWidget(self.refresh_btn)
-        
+
         # Home button
         self.home_btn = QPushButton("⌂")
         self.home_btn.setToolTip("Home")
@@ -195,6 +204,13 @@ class MainWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
+
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.status_bar.addPermanentWidget(self.progress_bar)
         
         # Add initial tab
         self.add_new_tab()
@@ -209,6 +225,11 @@ class MainWindow(QMainWindow):
         self._inspect_shortcut_ctrl_shift_i = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
         self._inspect_shortcut_ctrl_shift_i.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self._inspect_shortcut_ctrl_shift_i.activated.connect(self.open_devtools)
+
+        # New Tab shortcut
+        self._new_tab_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
+        self._new_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._new_tab_shortcut.activated.connect(self.add_new_tab)
 
         
 
@@ -445,10 +466,14 @@ class MainWindow(QMainWindow):
         
         # Connect signals
         web_view.titleChanged.connect(lambda title, view=web_view: self.update_tab_title(title, view))
+        web_view.iconChanged.connect(lambda icon, view=web_view: self.update_tab_icon(icon, view))
         web_view.urlChanged.connect(lambda url, view=web_view: self.update_url_bar(url, view))
         web_view.urlChanged.connect(lambda _url, view=web_view: self.update_nav_buttons(view=view))
         web_view.loadFinished.connect(self.add_to_history)
         web_view.loadFinished.connect(lambda _ok, view=web_view: self._install_blob_download_hook(view))
+        web_view.loadStarted.connect(lambda: self.status_bar.showMessage("Loading..."))
+        web_view.loadFinished.connect(lambda: self.status_bar.clearMessage())
+        web_view.page().linkHovered.connect(self.on_link_hovered)
         
         return web_view
     
@@ -818,6 +843,9 @@ class MainWindow(QMainWindow):
                 return i
         return -1
 
+    def on_link_hovered(self, url):
+        self.status_bar.showMessage(url)
+
     def on_tab_changed(self, index):
         current_tab = self.tabs.widget(index)
         if not current_tab or not hasattr(current_tab, "web_view"):
@@ -831,6 +859,11 @@ class MainWindow(QMainWindow):
         index = self.tabs.currentIndex() if view is None else self._tab_index_for_view(view)
         if index >= 0:
             self.tabs.setTabText(index, title)
+
+    def update_tab_icon(self, icon, view=None):
+        index = self.tabs.currentIndex() if view is None else self._tab_index_for_view(view)
+        if index >= 0:
+            self.tabs.setTabIcon(index, icon)
 
     def update_url_bar(self, url, view=None):
         # Only update the URL bar if the signal is from the active tab
